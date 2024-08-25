@@ -52,6 +52,8 @@ class PhotoGPSUpdater(QWidget):
         self.sort_combo = QComboBox(self)
         self.sort_combo.addItems(['Name', 'Creation Time', 'DateTimeOriginal'])
         self.sort_combo.currentIndexChanged.connect(self.sort_photos)
+        # Set default sort criteria to 'DateTimeOriginal'
+        self.sort_combo.setCurrentIndex(2)
 
         sort_layout = QHBoxLayout()
         sort_layout.addWidget(QLabel('Sort by:'))
