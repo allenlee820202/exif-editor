@@ -66,9 +66,21 @@ class PhotoGPSUpdater(QWidget):
         self.thumbnail_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.thumbnail_list.itemClicked.connect(self.display_photo_details)
 
+        self.thumbnail_list.itemClicked.connect(self.display_gps_data)
+
+        self.gps_entry = QLineEdit(self)
+        self.update_button = QPushButton('Update GPS Data', self)
+        self.update_button.clicked.connect(self.update_gps_data)
+
+        gps_layout = QHBoxLayout()
+        gps_layout.addWidget(QLabel('GPS Coordinates (lat, lon):'))
+        gps_layout.addWidget(self.gps_entry)
+        gps_layout.addWidget(self.update_button)
+
         left_layout.addLayout(folder_layout)
         left_layout.addLayout(sort_layout)
         left_layout.addWidget(self.thumbnail_list)
+        left_layout.addLayout(gps_layout)
 
         # Sidebar for photo preview and EXIF data
         self.sidebar = QWidget(self)
@@ -149,6 +161,35 @@ class PhotoGPSUpdater(QWidget):
             self.exif_data_text.setText("No EXIF data available")
 
         self.sidebar.show()  # Show sidebar when a photo is selected
+
+    def display_gps_data(self, item):
+        file_path = item.data(Qt.UserRole)['file_path']
+        image = Image.open(file_path)
+        exif_dict = piexif.load(image.info['exif'])
+        gps_ifd = exif_dict.get('GPS', {})
+        lat = self.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
+        lon = self.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
+        self.gps_entry.setText(f"{lat}, {lon}")
+
+    def convert_from_dms(self, dms):
+        degrees = dms[0][0] / dms[0][1]
+        minutes = dms[1][0] / dms[1][1] / 60
+        seconds = dms[2][0] / dms[2][1] / 3600
+        return degrees + minutes + seconds
+
+    def update_gps_data(self):
+        items = self.thumbnail_list.selectedItems()
+        if items:
+            gps_str = self.gps_entry.text()
+            try:
+                lat, lon = map(float, gps_str.split(', '))
+                gps_data = {'lat': lat, 'lon': lon}
+                for item in items:
+                    file_path = item.data(Qt.UserRole)['file_path']
+                    process_image(file_path, gps_data)
+                QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
+            except ValueError:
+                QMessageBox.warning(self, 'Error', 'Invalid GPS coordinates format. Please use "lat, lon".')
 
     def format_exif_data(self, exif_dict):
         metadata = []
