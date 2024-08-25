@@ -5,13 +5,13 @@ from PyQt5.QtCore import QSize, Qt, QTimer, QPoint
 from PIL import Image
 import piexif
 
-class PhotoGPSUpdater(QWidget):
+class ExifEditor(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Photo GPS Updater')
+        self.setWindowTitle('Exif Editor')
         self.setGeometry(100, 100, 1000, 600)
 
         main_layout = QHBoxLayout()
@@ -206,6 +206,6 @@ class PhotoGPSUpdater(QWidget):
 
 if __name__ == '__main__':
     app = QApplication([])
-    window = PhotoGPSUpdater()
+    window = ExifEditor()
     window.show()
     app.exec_()
