@@ -1,7 +1,7 @@
 import os
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QListWidget, QListWidgetItem, QMessageBox, QComboBox, QTextEdit, QSplitter
-from PyQt5.QtGui import QPixmap, QIcon, QCursor
-from PyQt5.QtCore import QSize, Qt, QTimer, QPoint
+from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtCore import QSize, Qt
 from PIL import Image
 import piexif
 import dms
