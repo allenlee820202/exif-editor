@@ -50,7 +50,7 @@ class PhotoGPSUpdater(QWidget):
         folder_layout.addWidget(self.folder_button)
 
         self.sort_combo = QComboBox(self)
-        self.sort_combo.addItems(['Name', 'Creation Time'])
+        self.sort_combo.addItems(['Name', 'Creation Time', 'DateTimeOriginal'])
         self.sort_combo.currentIndexChanged.connect(self.sort_photos)
 
         sort_layout = QHBoxLayout()
@@ -103,12 +103,15 @@ class PhotoGPSUpdater(QWidget):
             files.sort(key=lambda x: os.path.basename(x).lower())
         elif sort_criteria == 'Creation Time':
             files.sort(key=lambda x: os.path.getctime(x))
+        elif sort_criteria == 'DateTimeOriginal':
+            files.sort(key=lambda x: piexif.load(x).get('Exif', {}).get(piexif.ExifIFD.DateTimeOriginal, ''))
 
         for file_path in files:
             pixmap = QPixmap(file_path)
             thumbnail = pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             item = QListWidgetItem(QIcon(thumbnail), os.path.basename(file_path))
-            item.setData(Qt.UserRole, file_path)
+            file_dict = {'file_path': file_path, 'name': os.path.basename(file_path), 'ctime': os.path.getctime(file_path)}
+            item.setData(Qt.UserRole, file_dict)
 
             # Extract EXIF data
             try:
@@ -129,7 +132,7 @@ class PhotoGPSUpdater(QWidget):
             self.load_thumbnails(folder)
 
     def display_photo_details(self, item):
-        file_path = item.data(Qt.UserRole)
+        file_path = item.data(Qt.UserRole)['file_path']
         exif_dict = item.data(Qt.UserRole + 1)
 
         # Display photo preview
