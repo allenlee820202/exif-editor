@@ -4,6 +4,7 @@ from PyQt5.QtGui import QPixmap, QIcon, QCursor
 from PyQt5.QtCore import QSize, Qt, QTimer, QPoint
 from PIL import Image
 import piexif
+import dms
 
 class ExifEditor(QWidget):
     def __init__(self):
@@ -46,13 +47,13 @@ class ExifEditor(QWidget):
         self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
         self.gps_entry = QLineEdit(self)
-        self.update_button = QPushButton('Update GPS Data', self)
-        self.update_button.clicked.connect(self.update_gps_data)
+        self.update_gps_button = QPushButton('Update GPS Data', self)
+        self.update_gps_button.clicked.connect(self.update_gps_data)
 
         gps_layout = QHBoxLayout()
         gps_layout.addWidget(QLabel('GPS Coordinates (lat, lon):'))
         gps_layout.addWidget(self.gps_entry)
-        gps_layout.addWidget(self.update_button)
+        gps_layout.addWidget(self.update_gps_button)
 
         left_layout.addLayout(folder_layout)
         left_layout.addLayout(sort_layout)
@@ -142,21 +143,9 @@ class ExifEditor(QWidget):
         image = Image.open(file_path)
         exif_dict = piexif.load(image.info['exif'])
         gps_ifd = exif_dict.get('GPS', {})
-        lat = self.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
-        lon = self.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
+        lat = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
+        lon = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
         self.gps_entry.setText(f"{lat}, {lon}")
-
-    def convert_from_dms(self, dms):
-        degrees = dms[0][0] / dms[0][1]
-        minutes = dms[1][0] / dms[1][1] / 60
-        seconds = dms[2][0] / dms[2][1] / 3600
-        return degrees + minutes + seconds
-
-    def convert_to_dms(self, value):
-        degrees = int(value)
-        minutes = int((value - degrees) * 60)
-        seconds = int(((value - degrees) * 60 - minutes) * 60 * 100)
-        return ((degrees, 1), (minutes, 1), (seconds, 100))
 
     def update_gps_data(self):
         items = self.thumbnail_list.selectedItems()
@@ -182,9 +171,9 @@ class ExifEditor(QWidget):
     def update_gps_data_inner(self, exif_dict, gps_data):
         gps_ifd = {
             piexif.GPSIFD.GPSLatitudeRef: 'N' if gps_data['lat'] >= 0 else 'S',
-            piexif.GPSIFD.GPSLatitude: self.convert_to_dms(abs(gps_data['lat'])),
+            piexif.GPSIFD.GPSLatitude: dms.convert_to_dms(abs(gps_data['lat'])),
             piexif.GPSIFD.GPSLongitudeRef: 'E' if gps_data['lon'] >= 0 else 'W',
-            piexif.GPSIFD.GPSLongitude: self.convert_to_dms(abs(gps_data['lon'])),
+            piexif.GPSIFD.GPSLongitude: dms.convert_to_dms(abs(gps_data['lon'])),
         }
         exif_dict['GPS'] = gps_ifd
         return exif_dict
