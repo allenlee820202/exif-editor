@@ -49,7 +49,7 @@ class PhotoGPSUpdater(QWidget):
         folder_layout.addWidget(self.folder_button)
 
         self.sort_combo = QComboBox(self)
-        self.sort_combo.addItems(['Name', 'Creation Time'])
+        self.sort_combo.addItems(['Creation Time', 'Name'])
         self.sort_combo.currentIndexChanged.connect(self.sort_photos)
 
         sort_layout = QHBoxLayout()
