@@ -1,7 +1,7 @@
 import os
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QListWidget, QListWidgetItem, QMessageBox, QComboBox
-from PyQt5.QtGui import QPixmap, QIcon
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QListWidget, QListWidgetItem, QMessageBox, QComboBox, QTextEdit, QSplitter
+from PyQt5.QtGui import QPixmap, QIcon, QCursor
+from PyQt5.QtCore import QSize, Qt, QTimer, QPoint
 from PIL import Image
 import piexif
 
@@ -35,9 +35,10 @@ class PhotoGPSUpdater(QWidget):
 
     def initUI(self):
         self.setWindowTitle('Photo GPS Updater')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 600)
 
-        layout = QVBoxLayout()
+        main_layout = QHBoxLayout()
+        left_layout = QVBoxLayout()
 
         self.folder_entry = QLineEdit(self)
         self.folder_button = QPushButton('Browse', self)
@@ -49,7 +50,7 @@ class PhotoGPSUpdater(QWidget):
         folder_layout.addWidget(self.folder_button)
 
         self.sort_combo = QComboBox(self)
-        self.sort_combo.addItems(['Creation Time', 'Name'])
+        self.sort_combo.addItems(['Name', 'Creation Time'])
         self.sort_combo.currentIndexChanged.connect(self.sort_photos)
 
         sort_layout = QHBoxLayout()
@@ -61,23 +62,32 @@ class PhotoGPSUpdater(QWidget):
         self.thumbnail_list.setIconSize(QSize(100, 100))
         self.thumbnail_list.setResizeMode(QListWidget.Adjust)
         self.thumbnail_list.setSelectionMode(QListWidget.ExtendedSelection)
-        self.thumbnail_list.itemClicked.connect(self.display_gps_data)
+        self.thumbnail_list.itemClicked.connect(self.display_photo_details)
 
-        self.gps_entry = QLineEdit(self)
-        self.update_button = QPushButton('Update GPS Data', self)
-        self.update_button.clicked.connect(self.update_gps_data)
+        left_layout.addLayout(folder_layout)
+        left_layout.addLayout(sort_layout)
+        left_layout.addWidget(self.thumbnail_list)
 
-        gps_layout = QHBoxLayout()
-        gps_layout.addWidget(QLabel('GPS Coordinates (lat, lon):'))
-        gps_layout.addWidget(self.gps_entry)
-        gps_layout.addWidget(self.update_button)
+        # Sidebar for photo preview and EXIF data
+        self.sidebar = QWidget(self)
+        sidebar_layout = QVBoxLayout()
+        self.photo_preview = QLabel(self)
+        self.photo_preview.setFixedSize(300, 300)
+        self.exif_data_text = QTextEdit(self)
+        self.exif_data_text.setReadOnly(True)
+        sidebar_layout.addWidget(self.photo_preview)
+        sidebar_layout.addWidget(self.exif_data_text)
+        self.sidebar.setLayout(sidebar_layout)
+        self.sidebar.hide()  # Initialize sidebar as hidden
 
-        layout.addLayout(folder_layout)
-        layout.addLayout(sort_layout)
-        layout.addWidget(self.thumbnail_list)
-        layout.addLayout(gps_layout)
+        splitter = QSplitter(Qt.Horizontal)
+        left_widget = QWidget()
+        left_widget.setLayout(left_layout)
+        splitter.addWidget(left_widget)
+        splitter.addWidget(self.sidebar)
 
-        self.setLayout(layout)
+        main_layout.addWidget(splitter)
+        self.setLayout(main_layout)
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, 'Select Folder')
@@ -99,6 +109,18 @@ class PhotoGPSUpdater(QWidget):
             thumbnail = pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             item = QListWidgetItem(QIcon(thumbnail), os.path.basename(file_path))
             item.setData(Qt.UserRole, file_path)
+
+            # Extract EXIF data
+            try:
+                image = Image.open(file_path)
+                exif_dict = piexif.load(image.info['exif'])
+                # Remove thumbnail data from EXIF because its format is not compatible with piexif
+                exif_dict.pop('thumbnail', None)
+                item.setData(Qt.UserRole + 1, exif_dict)  # Store EXIF data in the item
+            except Exception as e:
+                print(f"Error loading EXIF data for {file_path}: {e}")
+                item.setData(Qt.UserRole + 1, None)  # Store None if EXIF data cannot be loaded
+
             self.thumbnail_list.addItem(item)
 
     def sort_photos(self):
@@ -106,34 +128,35 @@ class PhotoGPSUpdater(QWidget):
         if folder:
             self.load_thumbnails(folder)
 
-    def display_gps_data(self, item):
+    def display_photo_details(self, item):
         file_path = item.data(Qt.UserRole)
-        image = Image.open(file_path)
-        exif_dict = piexif.load(image.info['exif'])
-        gps_ifd = exif_dict.get('GPS', {})
-        lat = self.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
-        lon = self.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
-        self.gps_entry.setText(f"{lat}, {lon}")
+        exif_dict = item.data(Qt.UserRole + 1)
 
-    def convert_from_dms(self, dms):
-        degrees = dms[0][0] / dms[0][1]
-        minutes = dms[1][0] / dms[1][1] / 60
-        seconds = dms[2][0] / dms[2][1] / 3600
-        return degrees + minutes + seconds
+        # Display photo preview
+        pixmap = QPixmap(file_path)
+        self.photo_preview.setPixmap(pixmap.scaled(self.photo_preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-    def update_gps_data(self):
-        items = self.thumbnail_list.selectedItems()
-        if items:
-            gps_str = self.gps_entry.text()
-            try:
-                lat, lon = map(float, gps_str.split(', '))
-                gps_data = {'lat': lat, 'lon': lon}
-                for item in items:
-                    file_path = item.data(Qt.UserRole)
-                    process_image(file_path, gps_data)
-                QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
-            except ValueError:
-                QMessageBox.warning(self, 'Error', 'Invalid GPS coordinates format. Please use "lat, lon".')
+        # Display EXIF data
+        if exif_dict:
+            metadata = self.format_exif_data(exif_dict)
+            self.exif_data_text.setText(metadata)
+        else:
+            self.exif_data_text.setText("No EXIF data available")
+
+        self.sidebar.show()  # Show sidebar when a photo is selected
+
+    def format_exif_data(self, exif_dict):
+        metadata = []
+        for ifd in exif_dict:
+            for tag in exif_dict[ifd]:
+                tag_name = piexif.TAGS[ifd][tag]["name"]
+                tag_value = exif_dict[ifd][tag]
+                metadata.append(f"{tag_name}: {tag_value}")
+        return "\n".join(metadata)
+
+    def clear_selection(self):
+        self.thumbnail_list.clearSelection()
+        self.sidebar.hide()  # Hide sidebar when no photo is selected
 
 if __name__ == '__main__':
     app = QApplication([])
