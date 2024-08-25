@@ -42,8 +42,8 @@ class ExifEditor(QWidget):
         self.thumbnail_list.setResizeMode(QListWidget.Adjust)
         self.thumbnail_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.thumbnail_list.itemClicked.connect(self.display_photo_details)
-
         self.thumbnail_list.itemClicked.connect(self.display_gps_data)
+        self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
         self.gps_entry = QLineEdit(self)
         self.update_button = QPushButton('Update GPS Data', self)
@@ -137,8 +137,6 @@ class ExifEditor(QWidget):
         else:
             self.exif_data_text.setText("No EXIF data available")
 
-        self.sidebar.show()  # Show sidebar when a photo is selected
-
     def display_gps_data(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
         image = Image.open(file_path)
@@ -200,9 +198,12 @@ class ExifEditor(QWidget):
                 metadata.append(f"{tag_name}: {tag_value}")
         return "\n".join(metadata)
 
-    def clear_selection(self):
-        self.thumbnail_list.clearSelection()
-        self.sidebar.hide()  # Hide sidebar when no photo is selected
+    def handle_item_selection_changed(self):
+        selected_items = self.thumbnail_list.selectedItems()
+        if not selected_items:
+            self.sidebar.hide()  # Hide sidebar when no photo is selected
+        else:
+            self.sidebar.show()  # Show sidebar when at least one photo is selected
 
 if __name__ == '__main__':
     app = QApplication([])
