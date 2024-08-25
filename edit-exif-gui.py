@@ -5,29 +5,6 @@ from PyQt5.QtCore import QSize, Qt, QTimer, QPoint
 from PIL import Image
 import piexif
 
-def update_gps_data(exif_dict, gps_data):
-    gps_ifd = {
-        piexif.GPSIFD.GPSLatitudeRef: 'N' if gps_data['lat'] >= 0 else 'S',
-        piexif.GPSIFD.GPSLatitude: convert_to_dms(abs(gps_data['lat'])),
-        piexif.GPSIFD.GPSLongitudeRef: 'E' if gps_data['lon'] >= 0 else 'W',
-        piexif.GPSIFD.GPSLongitude: convert_to_dms(abs(gps_data['lon'])),
-    }
-    exif_dict['GPS'] = gps_ifd
-    return exif_dict
-
-def convert_to_dms(value):
-    degrees = int(value)
-    minutes = int((value - degrees) * 60)
-    seconds = int(((value - degrees) * 60 - minutes) * 60 * 100)
-    return ((degrees, 1), (minutes, 1), (seconds, 100))
-
-def process_image(file_path, gps_data):
-    image = Image.open(file_path)
-    exif_dict = piexif.load(image.info['exif'])
-    exif_dict = update_gps_data(exif_dict, gps_data)
-    exif_bytes = piexif.dump(exif_dict)
-    image.save(file_path, "jpeg", exif=exif_bytes)
-
 class PhotoGPSUpdater(QWidget):
     def __init__(self):
         super().__init__()
@@ -177,6 +154,12 @@ class PhotoGPSUpdater(QWidget):
         seconds = dms[2][0] / dms[2][1] / 3600
         return degrees + minutes + seconds
 
+    def convert_to_dms(self, value):
+        degrees = int(value)
+        minutes = int((value - degrees) * 60)
+        seconds = int(((value - degrees) * 60 - minutes) * 60 * 100)
+        return ((degrees, 1), (minutes, 1), (seconds, 100))
+
     def update_gps_data(self):
         items = self.thumbnail_list.selectedItems()
         if items:
@@ -186,10 +169,27 @@ class PhotoGPSUpdater(QWidget):
                 gps_data = {'lat': lat, 'lon': lon}
                 for item in items:
                     file_path = item.data(Qt.UserRole)['file_path']
-                    process_image(file_path, gps_data)
+                    self.process_image(file_path, gps_data)
                 QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
             except ValueError:
                 QMessageBox.warning(self, 'Error', 'Invalid GPS coordinates format. Please use "lat, lon".')
+
+    def process_image(self, file_path, gps_data):
+        image = Image.open(file_path)
+        exif_dict = piexif.load(image.info['exif'])
+        exif_dict = self.update_gps_data_inner(exif_dict, gps_data)
+        exif_bytes = piexif.dump(exif_dict)
+        image.save(file_path, "jpeg", exif=exif_bytes)
+
+    def update_gps_data_inner(self, exif_dict, gps_data):
+        gps_ifd = {
+            piexif.GPSIFD.GPSLatitudeRef: 'N' if gps_data['lat'] >= 0 else 'S',
+            piexif.GPSIFD.GPSLatitude: self.convert_to_dms(abs(gps_data['lat'])),
+            piexif.GPSIFD.GPSLongitudeRef: 'E' if gps_data['lon'] >= 0 else 'W',
+            piexif.GPSIFD.GPSLongitude: self.convert_to_dms(abs(gps_data['lon'])),
+        }
+        exif_dict['GPS'] = gps_ifd
+        return exif_dict
 
     def format_exif_data(self, exif_dict):
         metadata = []
