@@ -5,6 +5,7 @@ from PyQt5.QtCore import QSize, Qt
 from PIL import Image
 import piexif
 import dms
+import datetime
 
 class ExifEditor(QWidget):
     def __init__(self):
@@ -75,7 +76,8 @@ class ExifEditor(QWidget):
         # Local date time offset layout
         self.local_date_time_offset = QLineEdit(self)
         update_local_date_time_offset_button = QPushButton('Update local date time offset', self)
-        update_local_date_time_offset_button.clicked.connect(lambda: self.update_local_date_time_offset_for_all_images(self.thumbnail_list.selectedItems(), self.local_date_time_offset.text()))
+        update_local_date_time_offset_button.clicked.connect(lambda: self.update_local_date_time_by_offset_for_all_images(self.thumbnail_list.selectedItems(), self.local_date_time_offset.text()))
+        update_local_date_time_offset_button.clicked.connect(lambda: self.get_exif_date_time_original)
 
         local_date_time_offset_layout = QHBoxLayout()
         local_date_time_offset_layout.addWidget(QLabel('Local date time offset'))
@@ -259,6 +261,37 @@ class ExifEditor(QWidget):
         exif_dict = piexif.load(image.info['exif'])
         date_time_original = exif_dict['Exif'][piexif.ExifIFD.DateTimeOriginal].decode('utf-8')
         self.local_date_time.setText(f"DateTimeOriginal: {date_time_original}")
+
+    def update_local_date_time_by_offset_for_all_images(self, items, local_date_time_offset):
+        if items:
+            try:
+                for item in items:
+                    file_path = item.data(Qt.UserRole)['file_path']
+                    self.update_local_date_time_by_offset(file_path, local_date_time_offset)
+                QMessageBox.information(self, 'Success', 'Local date time offset updated successfully!')
+            except ValueError:
+                QMessageBox.warning(self, 'Error', 'Wrong offset format. Please use "[+-]HH:MM".')
+
+    def update_local_date_time_by_offset(self, file_path, local_date_time_offset):
+        image = Image.open(file_path)
+        exif_dict = piexif.load(image.info['exif'])
+        exif_dict = self.update_exif_local_date_time_by_offset(exif_dict, local_date_time_offset)
+        exif_bytes = piexif.dump(exif_dict)
+        image.save(file_path, "jpeg", exif=exif_bytes)
+
+    def update_exif_local_date_time_by_offset(self, exif_dict, local_date_time_offset):
+        ifd = 'Exif'
+
+        exif_dict[ifd][piexif.ExifIFD.DateTimeOriginal] = self.calculate_new_date_time_by_offset(exif_dict[ifd][piexif.ExifIFD.DateTimeOriginal].decode('utf-8'), local_date_time_offset).encode('utf-8')
+        exif_dict[ifd][piexif.ExifIFD.DateTimeDigitized] = self.calculate_new_date_time_by_offset(exif_dict[ifd][piexif.ExifIFD.DateTimeDigitized].decode('utf-8'), local_date_time_offset).encode('utf-8')
+        return exif_dict
+
+    # original_date_time: YYYY:MM:DD HH:MM:SS
+    # offset: [+-]HH:MM
+    def calculate_new_date_time_by_offset(self, original_date_time, offset):
+        original_dt = datetime.datetime.strptime(original_date_time, '%Y:%m:%d %H:%M:%S')
+        offset_dt = datetime.timedelta(hours=int(offset[:3]), minutes=int(offset[4:]))
+        return (original_dt + offset_dt).strftime('%Y:%m:%d %H:%M:%S')
 
     def handle_item_selection_changed(self):
         selected_items = self.thumbnail_list.selectedItems()
