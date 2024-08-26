@@ -46,6 +46,7 @@ class ExifEditor(QWidget):
         self.thumbnail_list.itemClicked.connect(self.display_photo_details)
         self.thumbnail_list.itemClicked.connect(self.display_gps_data)
         self.thumbnail_list.itemClicked.connect(self.display_offset_time_data)
+        self.thumbnail_list.itemClicked.connect(self.get_exif_date_time_original)
         self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
         # GPS data layout
@@ -68,11 +69,26 @@ class ExifEditor(QWidget):
         offset_time_layout.addWidget(self.timezone_entry)
         offset_time_layout.addWidget(update_time_zone_button)
 
+        # Local date time display
+        self.local_date_time = QLabel(self)
+
+        # Local date time offset layout
+        self.local_date_time_offset = QLineEdit(self)
+        update_local_date_time_offset_button = QPushButton('Update local date time offset', self)
+        update_local_date_time_offset_button.clicked.connect(lambda: self.update_local_date_time_offset_for_all_images(self.thumbnail_list.selectedItems(), self.local_date_time_offset.text()))
+
+        local_date_time_offset_layout = QHBoxLayout()
+        local_date_time_offset_layout.addWidget(QLabel('Local date time offset'))
+        local_date_time_offset_layout.addWidget(self.local_date_time_offset)
+        local_date_time_offset_layout.addWidget(update_local_date_time_offset_button)
+
         left_layout.addLayout(folder_layout)
         left_layout.addLayout(sort_layout)
         left_layout.addWidget(self.thumbnail_list)
         left_layout.addLayout(gps_layout)
         left_layout.addLayout(offset_time_layout)
+        left_layout.addWidget(self.local_date_time)
+        left_layout.addLayout(local_date_time_offset_layout)
 
         # Sidebar for photo preview and EXIF data
         self.sidebar = QWidget(self)
@@ -236,6 +252,13 @@ class ExifEditor(QWidget):
         exif_dict[ifd][piexif.ExifIFD.OffsetTimeOriginal] = offset_time.encode('utf-8')
         exif_dict[ifd][piexif.ExifIFD.OffsetTimeDigitized] = offset_time.encode('utf-8')
         return exif_dict
+    
+    def get_exif_date_time_original(self, item):
+        file_path = item.data(Qt.UserRole)['file_path']
+        image = Image.open(file_path)
+        exif_dict = piexif.load(image.info['exif'])
+        date_time_original = exif_dict['Exif'][piexif.ExifIFD.DateTimeOriginal].decode('utf-8')
+        self.local_date_time.setText(f"DateTimeOriginal: {date_time_original}")
 
     def handle_item_selection_changed(self):
         selected_items = self.thumbnail_list.selectedItems()
