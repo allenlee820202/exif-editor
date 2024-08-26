@@ -5,7 +5,6 @@ from PyQt5.QtCore import QSize, Qt
 from PIL import Image
 import piexif
 import dms
-from gps_layout import GPSLayout
 
 class ExifEditor(QWidget):
     def __init__(self):
@@ -46,6 +45,7 @@ class ExifEditor(QWidget):
         self.thumbnail_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.thumbnail_list.itemClicked.connect(self.display_photo_details)
         self.thumbnail_list.itemClicked.connect(self.display_gps_data)
+        self.thumbnail_list.itemClicked.connect(self.display_offset_time_data)
         self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
         # GPS data layout
@@ -58,10 +58,21 @@ class ExifEditor(QWidget):
         gps_layout.addWidget(self.gps_entry)
         gps_layout.addWidget(update_gps_button)
 
+        # OffsetTimeOriginal updater layout
+        self.timezone_entry = QLineEdit(self)
+        update_time_zone_button = QPushButton('Update time zone', self)
+        update_time_zone_button.clicked.connect(lambda: self.update_offset_time_for_all_images(self.thumbnail_list.selectedItems(), self.timezone_entry.text()))
+
+        offset_time_layout = QHBoxLayout()
+        offset_time_layout.addWidget(QLabel('Time zone(OffsetTimeOriginal)'))
+        offset_time_layout.addWidget(self.timezone_entry)
+        offset_time_layout.addWidget(update_time_zone_button)
+
         left_layout.addLayout(folder_layout)
         left_layout.addLayout(sort_layout)
         left_layout.addWidget(self.thumbnail_list)
         left_layout.addLayout(gps_layout)
+        left_layout.addLayout(offset_time_layout)
 
         # Sidebar for photo preview and EXIF data
         self.sidebar = QWidget(self)
@@ -186,7 +197,45 @@ class ExifEditor(QWidget):
                 tag_name = piexif.TAGS[ifd][tag]["name"]
                 tag_value = exif_dict[ifd][tag]
                 metadata.append(f"{tag_name}: {tag_value}")
+        metadata.sort()
         return "\n".join(metadata)
+
+    def display_offset_time_data(self, item):
+        file_path = item.data(Qt.UserRole)['file_path']
+        image = Image.open(file_path)
+        exif_ifd = piexif.load(image.info['exif']).get('Exif', {})
+        if (exif_ifd.get(piexif.ExifIFD.OffsetTimeOriginal) is not None):
+            offset_time_byte = exif_ifd[piexif.ExifIFD.OffsetTimeOriginal]
+            self.timezone_entry.setText(offset_time_byte.decode('utf-8'))
+        else:
+            self.timezone_entry.setText('')
+
+    def update_offset_time_for_all_images(self, items, offset_time):
+        if items:
+            try:
+                for item in items:
+                    file_path = item.data(Qt.UserRole)['file_path']
+                    self.update_image_offset_time_exif(file_path, offset_time)
+                QMessageBox.information(self, 'Success', 'OffsetTimeOriginal updated successfully!')
+            except ValueError:
+                QMessageBox.warning(self, 'Error', 'Invalid OffsetTimeOriginal format. Please use "[+-]HH:MM".')
+    
+    def update_image_offset_time_exif(self, file_path, offset_time):
+        image = Image.open(file_path)
+        exif_dict = piexif.load(image.info['exif'])
+        exif_dict = self.update_exif_offset_time(exif_dict, offset_time)
+        exif_bytes = piexif.dump(exif_dict)
+        image.save(file_path, "jpeg", exif=exif_bytes)
+
+    def update_exif_offset_time(self, exif_dict, offset_time):
+        ifd = 'Exif'
+
+        if ifd not in exif_dict:
+            exif_dict[ifd] = {}
+
+        exif_dict[ifd][piexif.ExifIFD.OffsetTimeOriginal] = offset_time.encode('utf-8')
+        exif_dict[ifd][piexif.ExifIFD.OffsetTimeDigitized] = offset_time.encode('utf-8')
+        return exif_dict
 
     def handle_item_selection_changed(self):
         selected_items = self.thumbnail_list.selectedItems()
