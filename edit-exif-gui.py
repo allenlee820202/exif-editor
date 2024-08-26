@@ -19,13 +19,13 @@ class ExifEditor(QWidget):
         left_layout = QVBoxLayout()
 
         self.folder_entry = QLineEdit(self)
-        self.folder_button = QPushButton('Browse', self)
-        self.folder_button.clicked.connect(self.select_folder)
+        folder_button = QPushButton('Browse', self)
+        folder_button.clicked.connect(self.select_folder)
 
         folder_layout = QHBoxLayout()
         folder_layout.addWidget(QLabel('Folder:'))
         folder_layout.addWidget(self.folder_entry)
-        folder_layout.addWidget(self.folder_button)
+        folder_layout.addWidget(folder_button)
 
         self.sort_combo = QComboBox(self)
         self.sort_combo.addItems(['Name', 'Creation Time', 'DateTimeOriginal'])
@@ -48,7 +48,7 @@ class ExifEditor(QWidget):
 
         self.gps_entry = QLineEdit(self)
         self.update_gps_button = QPushButton('Update GPS Data', self)
-        self.update_gps_button.clicked.connect(self.update_gps_data)
+        self.update_gps_button.clicked.connect(lambda: self.update_gps_data(self.thumbnail_list.selectedItems(), self.gps_entry.text()))
 
         gps_layout = QHBoxLayout()
         gps_layout.addWidget(QLabel('GPS Coordinates (lat, lon):'))
@@ -147,10 +147,8 @@ class ExifEditor(QWidget):
         lon = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
         self.gps_entry.setText(f"{lat}, {lon}")
 
-    def update_gps_data(self):
-        items = self.thumbnail_list.selectedItems()
+    def update_gps_data(self, items, gps_str):
         if items:
-            gps_str = self.gps_entry.text()
             try:
                 lat, lon = map(float, gps_str.split(', '))
                 gps_data = {'lat': lat, 'lon': lon}
