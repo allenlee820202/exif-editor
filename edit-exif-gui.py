@@ -5,6 +5,7 @@ from PyQt5.QtCore import QSize, Qt
 from PIL import Image
 import piexif
 import dms
+from gps_layout import GPSLayout
 
 class ExifEditor(QWidget):
     def __init__(self):
@@ -47,13 +48,13 @@ class ExifEditor(QWidget):
         self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
         self.gps_entry = QLineEdit(self)
-        self.update_gps_button = QPushButton('Update GPS Data', self)
-        self.update_gps_button.clicked.connect(lambda: self.update_gps_data(self.thumbnail_list.selectedItems(), self.gps_entry.text()))
+        update_gps_button = QPushButton('Update GPS Data', self)
+        update_gps_button.clicked.connect(lambda: self.update_gps_data(self.thumbnail_list.selectedItems(), self.gps_entry.text()))
 
         gps_layout = QHBoxLayout()
         gps_layout.addWidget(QLabel('GPS Coordinates (lat, lon):'))
         gps_layout.addWidget(self.gps_entry)
-        gps_layout.addWidget(self.update_gps_button)
+        gps_layout.addWidget(update_gps_button)
 
         left_layout.addLayout(folder_layout)
         left_layout.addLayout(sort_layout)
