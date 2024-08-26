@@ -38,6 +38,7 @@ class ExifEditor(QWidget):
         sort_layout.addWidget(QLabel('Sort by:'))
         sort_layout.addWidget(self.sort_combo)
 
+        # Thumbnail list
         self.thumbnail_list = QListWidget(self)
         self.thumbnail_list.setViewMode(QListWidget.IconMode)
         self.thumbnail_list.setIconSize(QSize(100, 100))
@@ -47,9 +48,10 @@ class ExifEditor(QWidget):
         self.thumbnail_list.itemClicked.connect(self.display_gps_data)
         self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
+        # GPS data layout
         self.gps_entry = QLineEdit(self)
         update_gps_button = QPushButton('Update GPS Data', self)
-        update_gps_button.clicked.connect(lambda: self.update_gps_data(self.thumbnail_list.selectedItems(), self.gps_entry.text()))
+        update_gps_button.clicked.connect(lambda: self.update_gps_for_all_images(self.thumbnail_list.selectedItems(), self.gps_entry.text()))
 
         gps_layout = QHBoxLayout()
         gps_layout.addWidget(QLabel('GPS Coordinates (lat, lon):'))
@@ -148,26 +150,26 @@ class ExifEditor(QWidget):
         lon = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
         self.gps_entry.setText(f"{lat}, {lon}")
 
-    def update_gps_data(self, items, gps_str):
+    def update_gps_for_all_images(self, items, gps_str):
         if items:
             try:
                 lat, lon = map(float, gps_str.split(', '))
                 gps_data = {'lat': lat, 'lon': lon}
                 for item in items:
                     file_path = item.data(Qt.UserRole)['file_path']
-                    self.process_image(file_path, gps_data)
+                    self.update_image_gps_exif(file_path, gps_data)
                 QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
             except ValueError:
                 QMessageBox.warning(self, 'Error', 'Invalid GPS coordinates format. Please use "lat, lon".')
 
-    def process_image(self, file_path, gps_data):
+    def update_image_gps_exif(self, file_path, gps_data):
         image = Image.open(file_path)
         exif_dict = piexif.load(image.info['exif'])
-        exif_dict = self.update_gps_data_inner(exif_dict, gps_data)
+        exif_dict = self.update_exif_gps(exif_dict, gps_data)
         exif_bytes = piexif.dump(exif_dict)
         image.save(file_path, "jpeg", exif=exif_bytes)
 
-    def update_gps_data_inner(self, exif_dict, gps_data):
+    def update_exif_gps(self, exif_dict, gps_data):
         gps_ifd = {
             piexif.GPSIFD.GPSLatitudeRef: 'N' if gps_data['lat'] >= 0 else 'S',
             piexif.GPSIFD.GPSLatitude: dms.convert_to_dms(abs(gps_data['lat'])),
