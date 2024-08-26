@@ -64,7 +64,7 @@ class ExifEditor(QWidget):
         update_time_zone_button.clicked.connect(lambda: self.update_offset_time_for_all_images(self.thumbnail_list.selectedItems(), self.timezone_entry.text()))
 
         offset_time_layout = QHBoxLayout()
-        offset_time_layout.addWidget(QLabel('Time zone(OffsetTimeOriginal)'))
+        offset_time_layout.addWidget(QLabel('Time zone(OffsetTimeOriginal, OffsetTimeDigitized)'))
         offset_time_layout.addWidget(self.timezone_entry)
         offset_time_layout.addWidget(update_time_zone_button)
 
