@@ -1,6 +1,5 @@
 import piexif
 from PIL import Image
-import dms
 import datetime
 
 def extract_exif_data(file_path):
@@ -28,8 +27,8 @@ def extract_gps_data(file_path):
     image = Image.open(file_path)
     exif_dict = piexif.load(image.info['exif'])
     gps_ifd = exif_dict.get('GPS', {})
-    lat = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
-    lon = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
+    lat = convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
+    lon = convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
     return lat, lon
 
 def update_image_gps_exif(file_path, gps_data):
@@ -42,9 +41,9 @@ def update_image_gps_exif(file_path, gps_data):
 def update_exif_gps(exif_dict, gps_data):
     gps_ifd = {
         piexif.GPSIFD.GPSLatitudeRef: 'N' if gps_data['lat'] >= 0 else 'S',
-        piexif.GPSIFD.GPSLatitude: dms.convert_to_dms(abs(gps_data['lat'])),
+        piexif.GPSIFD.GPSLatitude: convert_to_dms(abs(gps_data['lat'])),
         piexif.GPSIFD.GPSLongitudeRef: 'E' if gps_data['lon'] >= 0 else 'W',
-        piexif.GPSIFD.GPSLongitude: dms.convert_to_dms(abs(gps_data['lon'])),
+        piexif.GPSIFD.GPSLongitude: convert_to_dms(abs(gps_data['lon'])),
     }
     exif_dict['GPS'] = gps_ifd
     return exif_dict
@@ -59,14 +58,12 @@ def get_offset_time_data(file_path):
     else:
         return ''
 
-
 def update_image_offset_time_exif(file_path, offset_time):
     image = Image.open(file_path)
     exif_dict = piexif.load(image.info['exif'])
     exif_dict = update_exif_offset_time(exif_dict, offset_time)
     exif_bytes = piexif.dump(exif_dict)
     image.save(file_path, "jpeg", exif=exif_bytes)
-
 
 def update_exif_offset_time(exif_dict, offset_time):
     ifd = 'Exif'
@@ -103,3 +100,15 @@ def calculate_new_date_time_by_offset(original_date_time, offset):
     original_dt = datetime.datetime.strptime(original_date_time, '%Y:%m:%d %H:%M:%S')
     offset_dt = datetime.timedelta(hours=int(offset[:3]), minutes=int(offset[4:]))
     return (original_dt + offset_dt).strftime('%Y:%m:%d %H:%M:%S')
+
+def convert_from_dms(dms):
+    degrees = dms[0][0] / dms[0][1]
+    minutes = dms[1][0] / dms[1][1] / 60
+    seconds = dms[2][0] / dms[2][1] / 3600
+    return degrees + minutes + seconds
+
+def convert_to_dms(value):
+    degrees = int(value)
+    minutes = int((value - degrees) * 60)
+    seconds = int(((value - degrees) * 60 - minutes) * 60 * 100)
+    return ((degrees, 1), (minutes, 1), (seconds, 100))
