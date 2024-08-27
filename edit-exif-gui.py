@@ -168,30 +168,35 @@ class ExifEditor(QWidget):
         self.gps_entry.setText(f"{lat}, {lon}")
 
     def update_gps_for_all_images(self, items, gps_str):
-        if items:
-            try:
-                lat, lon = map(float, gps_str.split(', '))
-                gps_data = {'lat': lat, 'lon': lon}
-                for item in items:
-                    file_path = item.data(Qt.UserRole)['file_path']
-                    exif.update_image_gps_exif(file_path, gps_data)
-                QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
-            except ValueError:
+        if items is None:
+            return
+        gps_data = self.convert_gps_str_to_gps_data(gps_str)
+        try:
+            for item in items:
+                file_path = item.data(Qt.UserRole)['file_path']
+                exif.update_image_gps_exif(file_path, gps_data)
+            QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
+        except ValueError:
                 QMessageBox.warning(self, 'Error', 'Invalid GPS coordinates format. Please use "lat, lon".')
+    
+    def convert_gps_str_to_gps_data(self, gps_str):
+        lat, lon = map(float, gps_str.split(', '))
+        return {'lat': lat, 'lon': lon}
 
     def display_offset_time_data(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
         self.timezone_entry.setText(exif.get_offset_time_data(file_path))
 
     def update_offset_time_for_all_images(self, items, offset_time):
-        if items:
-            try:
-                for item in items:
-                    file_path = item.data(Qt.UserRole)['file_path']
-                    exif.update_image_offset_time_exif(file_path, offset_time)
-                QMessageBox.information(self, 'Success', 'OffsetTimeOriginal updated successfully!')
-            except ValueError:
-                QMessageBox.warning(self, 'Error', 'Invalid OffsetTimeOriginal format. Please use "[+-]HH:MM".')
+        if items is None:
+            return
+        try:
+            for item in items:
+                file_path = item.data(Qt.UserRole)['file_path']
+                exif.update_image_offset_time_exif(file_path, offset_time)
+            QMessageBox.information(self, 'Success', 'OffsetTimeOriginal updated successfully!')
+        except ValueError:
+            QMessageBox.warning(self, 'Error', 'Invalid OffsetTimeOriginal format. Please use "[+-]HH:MM".')
     
     def update_exif_date_time_original_display(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
@@ -199,14 +204,15 @@ class ExifEditor(QWidget):
         self.local_date_time.setText(f"DateTimeOriginal: {date_time_original}")
 
     def update_local_date_time_by_offset_for_all_images(self, items, local_date_time_offset):
-        if items:
-            try:
-                for item in items:
-                    file_path = item.data(Qt.UserRole)['file_path']
-                    exif.update_local_date_time_by_offset(file_path, local_date_time_offset)
-                QMessageBox.information(self, 'Success', 'Local date time offset updated successfully!')
-            except ValueError:
-                QMessageBox.warning(self, 'Error', 'Wrong offset format. Please use "[+-]HH:MM".')
+        if items is None:
+            return
+        try:
+            for item in items:
+                file_path = item.data(Qt.UserRole)['file_path']
+                exif.update_local_date_time_by_offset(file_path, local_date_time_offset)
+            QMessageBox.information(self, 'Success', 'Local date time offset updated successfully!')
+        except ValueError:
+            QMessageBox.warning(self, 'Error', 'Wrong offset format. Please use "[+-]HH:MM".')
 
     def handle_item_selection_changed(self):
         selected_items = self.thumbnail_list.selectedItems()
