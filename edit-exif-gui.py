@@ -161,18 +161,13 @@ class ExifEditor(QWidget):
 
         # Display EXIF data
         if exif_dict:
-            metadata = exif.format_exif_data(exif_dict)
-            self.exif_data_text.setText(metadata)
+            self.exif_data_text.setText(exif.format_exif_data(exif_dict))
         else:
             self.exif_data_text.setText("No EXIF data available")
 
     def display_gps_data(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
-        image = Image.open(file_path)
-        exif_dict = piexif.load(image.info['exif'])
-        gps_ifd = exif_dict.get('GPS', {})
-        lat = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
-        lon = dms.convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
+        lat, lon = exif.extract_gps_data(file_path)
         self.gps_entry.setText(f"{lat}, {lon}")
 
     def update_gps_for_all_images(self, items, gps_str):
@@ -182,64 +177,24 @@ class ExifEditor(QWidget):
                 gps_data = {'lat': lat, 'lon': lon}
                 for item in items:
                     file_path = item.data(Qt.UserRole)['file_path']
-                    self.update_image_gps_exif(file_path, gps_data)
+                    exif.update_image_gps_exif(file_path, gps_data)
                 QMessageBox.information(self, 'Success', 'GPS data updated successfully!')
             except ValueError:
                 QMessageBox.warning(self, 'Error', 'Invalid GPS coordinates format. Please use "lat, lon".')
 
-    def update_image_gps_exif(self, file_path, gps_data):
-        image = Image.open(file_path)
-        exif_dict = piexif.load(image.info['exif'])
-        exif_dict = self.update_exif_gps(exif_dict, gps_data)
-        exif_bytes = piexif.dump(exif_dict)
-        image.save(file_path, "jpeg", exif=exif_bytes)
-
-    def update_exif_gps(self, exif_dict, gps_data):
-        gps_ifd = {
-            piexif.GPSIFD.GPSLatitudeRef: 'N' if gps_data['lat'] >= 0 else 'S',
-            piexif.GPSIFD.GPSLatitude: dms.convert_to_dms(abs(gps_data['lat'])),
-            piexif.GPSIFD.GPSLongitudeRef: 'E' if gps_data['lon'] >= 0 else 'W',
-            piexif.GPSIFD.GPSLongitude: dms.convert_to_dms(abs(gps_data['lon'])),
-        }
-        exif_dict['GPS'] = gps_ifd
-        return exif_dict
-
     def display_offset_time_data(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
-        image = Image.open(file_path)
-        exif_ifd = piexif.load(image.info['exif']).get('Exif', {})
-        if (exif_ifd.get(piexif.ExifIFD.OffsetTimeOriginal) is not None):
-            offset_time_byte = exif_ifd[piexif.ExifIFD.OffsetTimeOriginal]
-            self.timezone_entry.setText(offset_time_byte.decode('utf-8'))
-        else:
-            self.timezone_entry.setText('')
+        self.timezone_entry.setText(exif.get_offset_time_data(file_path))
 
     def update_offset_time_for_all_images(self, items, offset_time):
         if items:
             try:
                 for item in items:
                     file_path = item.data(Qt.UserRole)['file_path']
-                    self.update_image_offset_time_exif(file_path, offset_time)
+                    exif.update_image_offset_time_exif(file_path, offset_time)
                 QMessageBox.information(self, 'Success', 'OffsetTimeOriginal updated successfully!')
             except ValueError:
                 QMessageBox.warning(self, 'Error', 'Invalid OffsetTimeOriginal format. Please use "[+-]HH:MM".')
-    
-    def update_image_offset_time_exif(self, file_path, offset_time):
-        image = Image.open(file_path)
-        exif_dict = piexif.load(image.info['exif'])
-        exif_dict = self.update_exif_offset_time(exif_dict, offset_time)
-        exif_bytes = piexif.dump(exif_dict)
-        image.save(file_path, "jpeg", exif=exif_bytes)
-
-    def update_exif_offset_time(self, exif_dict, offset_time):
-        ifd = 'Exif'
-
-        if ifd not in exif_dict:
-            exif_dict[ifd] = {}
-
-        exif_dict[ifd][piexif.ExifIFD.OffsetTimeOriginal] = offset_time.encode('utf-8')
-        exif_dict[ifd][piexif.ExifIFD.OffsetTimeDigitized] = offset_time.encode('utf-8')
-        return exif_dict
     
     def get_exif_date_time_original(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
