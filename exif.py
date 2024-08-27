@@ -2,6 +2,9 @@ import piexif
 from PIL import Image
 import datetime
 
+def get_datetime_original(file_path):
+    return piexif.load(file_path).get('Exif', {}).get(piexif.ExifIFD.DateTimeOriginal, '')
+
 def extract_exif_data(file_path):
     try:
         image = Image.open(file_path)

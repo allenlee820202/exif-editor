@@ -2,7 +2,6 @@ import os
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QListWidget, QListWidgetItem, QMessageBox, QComboBox, QTextEdit, QSplitter
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import QSize, Qt
-import piexif
 import exif
 
 class ExifEditor(QWidget):
@@ -126,7 +125,7 @@ class ExifEditor(QWidget):
         elif sort_criteria == 'Creation Time':
             files.sort(key=lambda x: os.path.getctime(x))
         elif sort_criteria == 'DateTimeOriginal':
-            files.sort(key=lambda x: piexif.load(x).get('Exif', {}).get(piexif.ExifIFD.DateTimeOriginal, ''))
+            files.sort(key=exif.get_datetime_original)
 
         for file_path in files:
             pixmap = QPixmap(file_path)
