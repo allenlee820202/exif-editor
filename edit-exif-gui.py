@@ -45,7 +45,7 @@ class ExifEditor(QWidget):
         self.thumbnail_list.itemClicked.connect(self.display_photo_details)
         self.thumbnail_list.itemClicked.connect(self.display_gps_data)
         self.thumbnail_list.itemClicked.connect(self.display_offset_time_data)
-        self.thumbnail_list.itemClicked.connect(self.get_exif_date_time_original)
+        self.thumbnail_list.itemClicked.connect(self.update_exif_date_time_original_display)
         self.thumbnail_list.itemSelectionChanged.connect(self.handle_item_selection_changed)
 
         # GPS data layout
@@ -75,7 +75,7 @@ class ExifEditor(QWidget):
         self.local_date_time_offset = QLineEdit(self)
         update_local_date_time_offset_button = QPushButton('Update local date time offset', self)
         update_local_date_time_offset_button.clicked.connect(lambda: self.update_local_date_time_by_offset_for_all_images(self.thumbnail_list.selectedItems(), self.local_date_time_offset.text()))
-        update_local_date_time_offset_button.clicked.connect(lambda: self.get_exif_date_time_original)
+        update_local_date_time_offset_button.clicked.connect(lambda: self.update_exif_date_time_original_display(self.thumbnail_list.selectedItems()[0]))
 
         local_date_time_offset_layout = QHBoxLayout()
         local_date_time_offset_layout.addWidget(QLabel('Local date time offset'))
@@ -193,7 +193,7 @@ class ExifEditor(QWidget):
             except ValueError:
                 QMessageBox.warning(self, 'Error', 'Invalid OffsetTimeOriginal format. Please use "[+-]HH:MM".')
     
-    def get_exif_date_time_original(self, item):
+    def update_exif_date_time_original_display(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
         date_time_original = exif.get_exif_date_time_original(file_path)
         self.local_date_time.setText(f"DateTimeOriginal: {date_time_original}")
