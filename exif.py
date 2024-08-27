@@ -7,8 +7,7 @@ def get_datetime_original(file_path):
 
 def extract_exif_data(file_path):
     try:
-        image = Image.open(file_path)
-        exif_dict = piexif.load(image.info['exif'])
+        exif_dict = piexif.load(file_path)
         # Remove thumbnail data from EXIF because its format is not compatible with piexif
         exif_dict.pop('thumbnail', None)
         return exif_dict
@@ -27,19 +26,17 @@ def format_exif_data(exif_dict):
     return "\n".join(metadata)
 
 def extract_gps_data(file_path):
-    image = Image.open(file_path)
-    exif_dict = piexif.load(image.info['exif'])
+    exif_dict = piexif.load(file_path)
     gps_ifd = exif_dict.get('GPS', {})
     lat = convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
     lon = convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
     return lat, lon
 
 def update_image_gps_exif(file_path, gps_data):
-    image = Image.open(file_path)
-    exif_dict = piexif.load(image.info['exif'])
+    exif_dict = piexif.load(file_path)
     exif_dict = update_exif_gps(exif_dict, gps_data)
     exif_bytes = piexif.dump(exif_dict)
-    image.save(file_path, "jpeg", exif=exif_bytes)
+    piexif.insert(exif_bytes, file_path)
 
 def update_exif_gps(exif_dict, gps_data):
     gps_ifd = {
