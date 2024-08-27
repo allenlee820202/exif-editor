@@ -4,6 +4,7 @@ from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import QSize, Qt
 from PIL import Image
 import piexif
+import exif
 import dms
 import datetime
 
@@ -137,15 +138,10 @@ class ExifEditor(QWidget):
             file_dict = {'file_path': file_path, 'name': os.path.basename(file_path), 'ctime': os.path.getctime(file_path)}
             item.setData(Qt.UserRole, file_dict)
 
-            # Extract EXIF data
             try:
-                image = Image.open(file_path)
-                exif_dict = piexif.load(image.info['exif'])
-                # Remove thumbnail data from EXIF because its format is not compatible with piexif
-                exif_dict.pop('thumbnail', None)
+                exif_dict = exif.extract_exif_data(file_path)
                 item.setData(Qt.UserRole + 1, exif_dict)  # Store EXIF data in the item
             except Exception as e:
-                print(f"Error loading EXIF data for {file_path}: {e}")
                 item.setData(Qt.UserRole + 1, None)  # Store None if EXIF data cannot be loaded
 
             self.thumbnail_list.addItem(item)
@@ -165,7 +161,7 @@ class ExifEditor(QWidget):
 
         # Display EXIF data
         if exif_dict:
-            metadata = self.format_exif_data(exif_dict)
+            metadata = exif.format_exif_data(exif_dict)
             self.exif_data_text.setText(metadata)
         else:
             self.exif_data_text.setText("No EXIF data available")
@@ -207,16 +203,6 @@ class ExifEditor(QWidget):
         }
         exif_dict['GPS'] = gps_ifd
         return exif_dict
-
-    def format_exif_data(self, exif_dict):
-        metadata = []
-        for ifd in exif_dict:
-            for tag in exif_dict[ifd]:
-                tag_name = piexif.TAGS[ifd][tag]["name"]
-                tag_value = exif_dict[ifd][tag]
-                metadata.append(f"{tag_name}: {tag_value}")
-        metadata.sort()
-        return "\n".join(metadata)
 
     def display_offset_time_data(self, item):
         file_path = item.data(Qt.UserRole)['file_path']
