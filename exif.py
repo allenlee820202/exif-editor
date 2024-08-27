@@ -1,6 +1,7 @@
 import piexif
 from PIL import Image
 import dms
+import datetime
 
 def extract_exif_data(file_path):
     try:
@@ -76,3 +77,29 @@ def update_exif_offset_time(exif_dict, offset_time):
     exif_dict[ifd][piexif.ExifIFD.OffsetTimeOriginal] = offset_time.encode('utf-8')
     exif_dict[ifd][piexif.ExifIFD.OffsetTimeDigitized] = offset_time.encode('utf-8')
     return exif_dict
+
+def get_exif_date_time_original(file_path):
+    image = Image.open(file_path)
+    exif_dict = piexif.load(image.info['exif'])
+    return exif_dict['Exif'][piexif.ExifIFD.DateTimeOriginal].decode('utf-8')
+
+def update_local_date_time_by_offset(file_path, local_date_time_offset):
+    image = Image.open(file_path)
+    exif_dict = piexif.load(image.info['exif'])
+    exif_dict = update_exif_local_date_time_by_offset(exif_dict, local_date_time_offset)
+    exif_bytes = piexif.dump(exif_dict)
+    image.save(file_path, "jpeg", exif=exif_bytes)
+
+def update_exif_local_date_time_by_offset(exif_dict, local_date_time_offset):
+    ifd = 'Exif'
+
+    exif_dict[ifd][piexif.ExifIFD.DateTimeOriginal] = calculate_new_date_time_by_offset(exif_dict[ifd][piexif.ExifIFD.DateTimeOriginal].decode('utf-8'), local_date_time_offset).encode('utf-8')
+    exif_dict[ifd][piexif.ExifIFD.DateTimeDigitized] = calculate_new_date_time_by_offset(exif_dict[ifd][piexif.ExifIFD.DateTimeDigitized].decode('utf-8'), local_date_time_offset).encode('utf-8')
+    return exif_dict
+
+# original_date_time: YYYY:MM:DD HH:MM:SS
+# offset: [+-]HH:MM
+def calculate_new_date_time_by_offset(original_date_time, offset):
+    original_dt = datetime.datetime.strptime(original_date_time, '%Y:%m:%d %H:%M:%S')
+    offset_dt = datetime.timedelta(hours=int(offset[:3]), minutes=int(offset[4:]))
+    return (original_dt + offset_dt).strftime('%Y:%m:%d %H:%M:%S')
