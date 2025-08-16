@@ -236,15 +236,19 @@ class ExifEditor(QWidget):
             except:
                 datetime_original = ''
                 
-            items_data.append((datetime_original, item))
+            # Store the data, not the item object
+            items_data.append((datetime_original, item.data(Qt.UserRole), item.icon()))
         
         # Sort by datetime
         items_data.sort(key=lambda x: x[0])
         
-        # Clear and re-add in sorted order
-        # self.thumbnail_list.clear()
-        # for _, item in items_data:
-        #     self.thumbnail_list.addItem(item)
+        # Clear and recreate items in sorted order
+        self.thumbnail_list.clear()
+        for _, file_dict, icon in items_data:
+            new_item = QListWidgetItem(icon, file_dict['name'])
+            new_item.setData(Qt.UserRole, file_dict)
+            new_item.setData(Qt.UserRole + 1, None)  # EXIF data will be lazy loaded
+            self.thumbnail_list.addItem(new_item)
 
     def sort_photos(self):
         folder = self.folder_entry.text()
