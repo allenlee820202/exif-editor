@@ -6,3 +6,5 @@
 
 # Ignore photo folders
 photo*/
+
+location-history.json
