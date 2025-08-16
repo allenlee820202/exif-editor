@@ -1,10 +1,9 @@
 import os
-import json
-import datetime
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QListWidget, QListWidgetItem, QMessageBox, QComboBox, QTextEdit, QSplitter, QProgressBar, QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QScrollArea
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QTimer
 import exif
+import location_history
 
 class ThumbnailLoader(QThread):
     thumbnail_ready = pyqtSignal(str, QPixmap, dict)
@@ -55,161 +54,23 @@ class LocationHistoryProcessor(QThread):
     processing_progress = pyqtSignal(int, int)
     processing_complete = pyqtSignal(list)
     
-    def __init__(self, location_file, photo_files, time_range):
+    def __init__(self, location_file, photo_files):
         super().__init__()
         self.location_file = location_file
         self.photo_files = photo_files
-        self.time_range = time_range
         
     def run(self):
-        try:
-            # Load and filter location history
-            with open(self.location_file, 'r') as f:
-                location_data = json.load(f)
-            
-            # Filter locations within time range
-            filtered_locations = []
-            start_time, end_time = self.time_range
-            
-            for entry in location_data:
-                entry_time = self.parse_time(entry.get('startTime', ''))
-                if entry_time and start_time <= entry_time <= end_time:
-                    filtered_locations.append(entry)
-            
-            # Calculate GPS for each photo
-            photo_gps_data = []
-            total_photos = len(self.photo_files)
-            
-            for i, file_path in enumerate(self.photo_files):
-                try:
-                    # Get photo timestamp
-                    photo_time = self.get_photo_timestamp(file_path)
-                    if photo_time:
-                        # Find closest location
-                        gps_coords = self.find_closest_location(photo_time, filtered_locations)
-                        if gps_coords:
-                            photo_gps_data.append({
-                                'file_path': file_path,
-                                'timestamp': photo_time,
-                                'gps': gps_coords,
-                                'filename': os.path.basename(file_path)
-                            })
-                except Exception as e:
-                    print(f"Error processing {file_path}: {e}")
-                
-                self.processing_progress.emit(i + 1, total_photos)
-            
-            self.processing_complete.emit(photo_gps_data)
-            
-        except Exception as e:
-            print(f"Error processing location history: {e}")
-            self.processing_complete.emit([])
-    
-    def parse_time(self, time_str):
-        """Parse ISO time string to datetime object"""
-        try:
-            # Handle format: "2013-07-21T18:20:06.088+08:00"
-            if time_str:
-                # Remove microseconds and parse
-                time_str = time_str.split('.')[0] + time_str[-6:]
-                return datetime.datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-        except Exception:
-            pass
-        return None
-    
-    def get_photo_timestamp(self, file_path):
-        """Extract timestamp from photo EXIF data"""
-        try:
-            datetime_str = exif.get_exif_date_time_original(file_path)
-            timezone_offset = exif.get_offset_time_data(file_path)
-            timestamp = None
-            if datetime_str:
-                timestamp = datetime.datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
-            if timezone_offset:
-                # timezone_offset looks like "+08:00" or "-05:00"
-                # Parse sign, hours, and minutes from the offset string
-                sign = 1 if timezone_offset[0] == '+' else -1
-                hours = int(timezone_offset[1:3])
-                minutes = int(timezone_offset[4:6])
-                offset = datetime.timedelta(hours=sign * hours, minutes=sign * minutes)
-                timestamp = timestamp.replace(tzinfo=datetime.timezone(offset))
-            return timestamp
-        except Exception:
-            # Fallback to file modification time
-            try:
-                return datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
-            except Exception:
-                pass
-        return None
-    
-    def find_closest_location(self, photo_time, locations):
-        """Find the closest location entry to photo timestamp"""
-        closest_location = None
-        min_time_diff = float('inf')
+        """Process photos with location history using the location_history module"""
+        def progress_callback(current, total):
+            self.processing_progress.emit(current, total)
         
-        for entry in locations:
-            entry_time = self.parse_time(entry.get('startTime', ''))
-            if not entry_time:
-                continue
-                
-            time_diff = abs((photo_time - entry_time).total_seconds())
-            if time_diff >= min_time_diff:
-                continue
-            
-            # Handle 'visit' entries
-            if 'visit' in entry and 'topCandidate' in entry['visit']:
-                candidate = entry['visit']['topCandidate']
-                if 'placeLocation' in candidate:
-                    geo_str = candidate['placeLocation']
-                    if geo_str.startswith('geo:'):
-                        coords = geo_str[4:].split(',')
-                        if len(coords) == 2:
-                            try:
-                                lat, lon = float(coords[0]), float(coords[1])
-                                min_time_diff = time_diff
-                                closest_location = {
-                                    'lat': lat,
-                                    'lon': lon,
-                                    'semantic_type': f"Visit: {candidate.get('semanticType', 'Unknown')}",
-                                    'probability': candidate.get('probability', '0'),
-                                    'time_diff_minutes': int(time_diff / 60)
-                                }
-                            except ValueError:
-                                continue
-            
-            # Handle 'activity' entries
-            elif 'activity' in entry:
-                activity = entry['activity']
-                geo_str = None
-                activity_type = 'Unknown'
-                
-                # Get activity type from topCandidate
-                if 'topCandidate' in activity and 'type' in activity['topCandidate']:
-                    activity_type = activity['topCandidate']['type']
-                
-                # Try to get location from start first, then end
-                if 'start' in activity:
-                    geo_str = activity['start']
-                elif 'end' in activity:
-                    geo_str = activity['end']
-                
-                if geo_str and geo_str.startswith('geo:'):
-                    coords = geo_str[4:].split(',')
-                    if len(coords) == 2:
-                        try:
-                            lat, lon = float(coords[0]), float(coords[1])
-                            min_time_diff = time_diff
-                            closest_location = {
-                                'lat': lat,
-                                'lon': lon,
-                                'semantic_type': f"Activity: {activity_type}",
-                                'probability': '1.0',  # Activities are definitive locations
-                                'time_diff_minutes': int(time_diff / 60)
-                            }
-                        except ValueError:
-                            continue
+        photo_gps_data = location_history.process_photos_with_location_history(
+            self.location_file,
+            self.photo_files,
+            progress_callback
+        )
         
-        return closest_location
+        self.processing_complete.emit(photo_gps_data)
 
 class LocationPreviewDialog(QDialog):
     def __init__(self, photo_gps_data, parent=None):
@@ -624,63 +485,21 @@ class ExifEditor(QWidget):
             file_path = item.data(Qt.UserRole)['file_path']
             photo_files.append(file_path)
         
-        # Extract time range from photos
-        time_range = self.extract_photo_time_range(photo_files)
+        # Check if we can extract time range from photos
+        time_range = location_history.extract_photo_time_range(photo_files)
         if not time_range:
             QMessageBox.warning(self, 'No Timestamps', 'Could not extract timestamps from photos.')
             return
-        
-        # Expand time range by 24 hours on each side for timezone handling
-        start_time, end_time = time_range
-        expanded_start = start_time - datetime.timedelta(hours=24)
-        expanded_end = end_time + datetime.timedelta(hours=24)
-        expanded_range = (expanded_start, expanded_end)
         
         # Show progress and start processing
         self.progress_bar.setVisible(True)
         self.progress_bar.setFormat('Processing location history... %p%')
         
         # Start location history processor
-        self.location_processor = LocationHistoryProcessor(location_file, photo_files, expanded_range)
+        self.location_processor = LocationHistoryProcessor(location_file, photo_files)
         self.location_processor.processing_progress.connect(self.on_location_processing_progress)
         self.location_processor.processing_complete.connect(self.on_location_processing_complete)
-        self.location_processor.run()
-    
-    def extract_photo_time_range(self, photo_files):
-        """Extract earliest and latest timestamps from photos"""
-        timestamps = []
-        
-        for file_path in photo_files:
-            try:
-                # Try to get EXIF timestamp first
-                datetime_str = exif.get_exif_date_time_original(file_path)
-                timezone_offset = exif.get_offset_time_data(file_path)
-                timestamp = None
-                if datetime_str:
-                    timestamp = datetime.datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
-                else:
-                    # Fallback to file modification time
-                    timestamp = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
-                if timezone_offset:
-                    # timezone_offset looks like "+08:00" or "-05:00"
-                    # Parse sign, hours, and minutes from the offset string
-                    sign = 1 if timezone_offset[0] == '+' else -1
-                    hours = int(timezone_offset[1:3])
-                    minutes = int(timezone_offset[4:6])
-                    offset = datetime.timedelta(hours=sign * hours, minutes=sign * minutes)
-                    timestamp = timestamp.replace(tzinfo=datetime.timezone(offset))
-                else:
-                    timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
-                timestamps.append(timestamp)
-
-            except Exception as e:
-                print(f"Could not extract timestamp from {file_path}: {e}")
-                continue
-        
-        if not timestamps:
-            return None
-        
-        return (min(timestamps), max(timestamps))
+        self.location_processor.start()  # Use start() instead of run() for threading
     
     def on_location_processing_progress(self, current, total):
         """Update progress during location processing"""
