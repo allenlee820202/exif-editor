@@ -23,8 +23,6 @@ def parse_time(time_str: str) -> Optional[datetime.datetime]:
     """
     try:
         if time_str:
-            # Remove microseconds and parse
-            time_str = time_str.split('.')[0] + time_str[-6:]
             return datetime.datetime.fromisoformat(time_str.replace('Z', '+00:00'))
     except Exception:
         pass
@@ -82,6 +80,7 @@ def find_closest_location(photo_time: datetime.datetime, locations: List[Dict[st
     """
     closest_location = None
     min_time_diff = float('inf')
+    min_entry = None
     
     for entry in locations:
         entry_time = parse_time(entry.get('startTime', ''))
@@ -102,7 +101,6 @@ def find_closest_location(photo_time: datetime.datetime, locations: List[Dict[st
                     if len(coords) == 2:
                         try:
                             lat, lon = float(coords[0]), float(coords[1])
-                            min_time_diff = time_diff
                             closest_location = {
                                 'lat': lat,
                                 'lon': lon,
@@ -134,7 +132,6 @@ def find_closest_location(photo_time: datetime.datetime, locations: List[Dict[st
                 if len(coords) == 2:
                     try:
                         lat, lon = float(coords[0]), float(coords[1])
-                        min_time_diff = time_diff
                         closest_location = {
                             'lat': lat,
                             'lon': lon,
@@ -144,6 +141,13 @@ def find_closest_location(photo_time: datetime.datetime, locations: List[Dict[st
                         }
                     except ValueError:
                         continue
+        
+        else:
+            print(f"Unknown entry type in location data: {entry}")
+            continue
+
+        min_time_diff = time_diff
+        min_entry = entry
     
     return closest_location
 
