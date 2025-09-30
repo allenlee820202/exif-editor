@@ -29,7 +29,13 @@ def extract_gps_data(file_path):
     exif_dict = piexif.load(file_path)
     gps_ifd = exif_dict.get('GPS', {})
     lat = convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude, ((0, 1), (0, 1), (0, 1))))
+    latRef = gps_ifd.get(piexif.GPSIFD.GPSLatitudeRef, 'N')
     lon = convert_from_dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude, ((0, 1), (0, 1), (0, 1))))
+    lonRef = gps_ifd.get(piexif.GPSIFD.GPSLongitudeRef, 'E')
+    if latRef == b'S':
+        lat = -lat
+    if lonRef == b'W':
+        lon = -lon
     return lat, lon
 
 def update_image_gps_exif(file_path, gps_data):
