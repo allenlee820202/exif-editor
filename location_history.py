@@ -3,6 +3,14 @@ Google Location History processing module.
 
 This module provides functionality to process Google Location History JSON files
 and match location data with photo timestamps for EXIF GPS tagging.
+
+Supports three types of location entries:
+- 'visit': Places with semantic meaning (home, work, restaurants, etc.)
+- 'activity': Movement activities (walking, driving, cycling, etc.) 
+- 'timelinePath': Detailed movement tracking with minute-by-minute GPS coordinates
+
+The timelinePath entries provide the most accurate location matching by finding
+the exact GPS point closest to the photo timestamp within a movement timeline.
 """
 
 import os
@@ -71,84 +79,122 @@ def get_photo_timestamp(file_path: str) -> Optional[datetime.datetime]:
 def find_closest_location(photo_time: datetime.datetime, locations: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Find the closest location entry to photo timestamp.
     
+    This function supports three types of Google Location History entries:
+    1. 'visit' entries - places with semantic meaning (home, work, etc.)
+    2. 'activity' entries - movement activities (walking, driving, etc.)
+    3. 'timelinePath' entries - detailed movement tracking with minute-by-minute GPS points
+    
+    For timelinePath entries, it finds the GPS point with the closest time offset
+    to the photo timestamp, providing highly accurate location matching.
+    
     Args:
         photo_time: Timestamp of the photo
         locations: List of location entries from Google Location History
         
     Returns:
-        Dictionary with location data or None if no match found
+        Dictionary with location data or None if no match found.
+        Contains: lat, lon, semantic_type, probability, time_diff_minutes
     """
     closest_location = None
     min_time_diff = float('inf')
-    min_entry = None
-    
+
     for entry in locations:
         entry_time = parse_time(entry.get('startTime', ''))
         if not entry_time:
             continue
-            
-        time_diff = abs((photo_time - entry_time).total_seconds())
-        if time_diff >= min_time_diff:
-            continue
-        
+
+        entry_best_location = None
+        entry_best_time_diff = float('inf')
+
         # Handle 'visit' entries
         if 'visit' in entry and 'topCandidate' in entry['visit']:
             candidate = entry['visit']['topCandidate']
-            if 'placeLocation' in candidate:
-                geo_str = candidate['placeLocation']
-                if geo_str.startswith('geo:'):
-                    coords = geo_str[4:].split(',')
-                    if len(coords) == 2:
-                        try:
-                            lat, lon = float(coords[0]), float(coords[1])
-                            closest_location = {
-                                'lat': lat,
-                                'lon': lon,
-                                'semantic_type': f"Visit: {candidate.get('semanticType', 'Unknown')}",
-                                'probability': candidate.get('probability', '0'),
-                                'time_diff_minutes': int(time_diff / 60)
-                            }
-                        except ValueError:
-                            continue
-        
+            geo_str = candidate.get('placeLocation', '')
+            if geo_str.startswith('geo:'):
+                coords = geo_str[4:].split(',')
+                if len(coords) == 2:
+                    try:
+                        lat, lon = float(coords[0]), float(coords[1])
+                        time_diff = abs((photo_time - entry_time).total_seconds())
+                        entry_best_location = {
+                            'lat': lat,
+                            'lon': lon,
+                            'semantic_type': f"Visit: {candidate.get('semanticType', 'Unknown')}",
+                            'probability': candidate.get('probability', '0'),
+                            'time_diff_minutes': int(time_diff / 60)
+                        }
+                        entry_best_time_diff = time_diff
+                    except ValueError:
+                        continue
+
         # Handle 'activity' entries
         elif 'activity' in entry:
             activity = entry['activity']
-            geo_str = None
-            activity_type = 'Unknown'
-            
-            # Get activity type from topCandidate
-            if 'topCandidate' in activity and 'type' in activity['topCandidate']:
-                activity_type = activity['topCandidate']['type']
-            
-            # Try to get location from start first, then end
-            if 'start' in activity:
-                geo_str = activity['start']
-            elif 'end' in activity:
-                geo_str = activity['end']
-            
+            geo_str = activity.get('start') or activity.get('end')
+            activity_type = activity.get('topCandidate', {}).get('type', 'Unknown')
+
             if geo_str and geo_str.startswith('geo:'):
                 coords = geo_str[4:].split(',')
                 if len(coords) == 2:
                     try:
                         lat, lon = float(coords[0]), float(coords[1])
-                        closest_location = {
+                        time_diff = abs((photo_time - entry_time).total_seconds())
+                        entry_best_location = {
                             'lat': lat,
                             'lon': lon,
                             'semantic_type': f"Activity: {activity_type}",
-                            'probability': '1.0',  # Activities are definitive locations
+                            'probability': '1.0',
                             'time_diff_minutes': int(time_diff / 60)
                         }
+                        entry_best_time_diff = time_diff
                     except ValueError:
                         continue
-        
+
+        # Handle 'timelinePath' entries
+        elif 'timelinePath' in entry:
+            timeline_path = entry['timelinePath']
+
+            # Calculate the target time offset from entry start time
+            target_offset_seconds = (photo_time - entry_time).total_seconds()
+            target_offset_minutes = target_offset_seconds / 60
+
+            # Find the closest point in this timeline path entry
+            for point_data in timeline_path:
+                point_offset_minutes = int(point_data.get('durationMinutesOffsetFromStartTime', '0'))
+                point_time_diff = abs(target_offset_minutes - point_offset_minutes)
+                point_time_diff_seconds = point_time_diff * 60
+
+                if point_time_diff_seconds >= entry_best_time_diff:
+                    continue
+
+                geo_str = point_data.get('point', '')
+                if not geo_str.startswith('geo:'):
+                    continue
+
+                coords = geo_str[4:].split(',')
+                if len(coords) != 2:
+                    continue
+
+                try:
+                    lat, lon = float(coords[0]), float(coords[1])
+                    entry_best_location = {
+                        'lat': lat,
+                        'lon': lon,
+                        'semantic_type': f"Timeline Path (offset: {point_offset_minutes}m)",
+                        'probability': '1.0',
+                        'time_diff_minutes': int(point_time_diff)
+                    }
+                    entry_best_time_diff = point_time_diff_seconds
+                except ValueError:
+                    continue
         else:
             print(f"Unknown entry type in location data: {entry}")
             continue
 
-        min_time_diff = time_diff
-        min_entry = entry
-    
+        if entry_best_location and entry_best_time_diff < min_time_diff:
+            closest_location = entry_best_location
+            min_time_diff = entry_best_time_diff
+
     return closest_location
 
 
