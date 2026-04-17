@@ -8,3 +8,6 @@
 photo*/
 
 location-history.json
+
+# Build artifacts
+dist/

@@ -1,73 +1,148 @@
 # EXIF Editor
 
-A Python-based EXIF metadata editor for JPEG images with both command-line and graphical user interfaces. Edit GPS coordinates, timezone data, and date/time information in your image metadata.
+EXIF metadata editor for JPEG images with:
+- Python core logic for EXIF and location-history matching
+- Legacy PyQt5 desktop GUI (kept as-is)
+- New Flutter desktop GUI (dark gray + green glassy theme)
 
-## Features
+## What is New
 
-- **Batch GPS coordinate updates** - Add or modify GPS location data for multiple images
-- **Timezone offset editing** - Update OffsetTimeOriginal and OffsetTimeDigitized fields
-- **Date/time adjustment** - Modify image timestamps by applying time offsets
-- **Dual interface** - Both CLI for batch processing and GUI for interactive editing
-- **Thumbnail preview** - Visual interface with image thumbnails and EXIF data display
-- **Multiple sorting options** - Sort images by name, creation time, or DateTimeOriginal
+- Added a Flutter macOS app in `flutter_app/`
+- Added a Python backend API in `flutter_backend.py` that reuses existing logic from `exif.py` and `location_history.py`
+- Added helper scripts:
+  - `scripts/dev-flutter.sh` for one-command local startup
+  - `scripts/build-flutter-macos.sh` for release build output
 
-## Installation
+## Prerequisites
 
-This project uses [uv](https://github.com/astral-sh/uv) for package management:
+- Python 3.9+ (managed through `uv`)
+- [uv](https://github.com/astral-sh/uv)
+- Flutter SDK (stable)
+- macOS desktop target enabled for Flutter
+
+Useful checks:
 
 ```bash
-# Install dependencies
-uv sync
+flutter --version
+flutter doctor -v
 ```
 
-## Usage
+Notes:
+- Android SDK is optional unless you want Android builds.
+- For signed macOS/iOS distribution builds, install full Xcode (not only Command Line Tools).
 
-### Command Line Interface
-
-Batch process all JPEG images in a directory to add GPS coordinates:
+## Install Project Dependencies
 
 ```bash
-python edit-exif-cli.py <directory> <latitude> <longitude>
+uv sync
+flutter pub get --project-dir flutter_app
+```
+
+## Run the New Flutter App (Recommended)
+
+One command starts both Python backend and Flutter desktop app:
+
+```bash
+./scripts/dev-flutter.sh
+```
+
+Optional environment overrides:
+
+```bash
+BACKEND_HOST=127.0.0.1 BACKEND_PORT=8765 ./scripts/dev-flutter.sh
+```
+
+## Run Flutter Web (Lightweight Dev on 8GB RAM)
+
+Use this path when you want to avoid full Xcode for day-to-day UI work.
+
+```bash
+./scripts/dev-flutter-web.sh
+```
+
+Optional overrides:
+
+```bash
+BACKEND_HOST=127.0.0.1 BACKEND_PORT=8765 WEB_DEVICE=chrome ./scripts/dev-flutter-web.sh
+```
+
+Notes for web mode:
+- Folder and location-history file selection use typed absolute paths in the UI.
+- Keep backend on `127.0.0.1` and run browser on the same machine.
+- Image previews are served through backend endpoint `/photos/image`.
+
+## Build Release (macOS)
+
+```bash
+./scripts/build-flutter-macos.sh
+```
+
+Artifacts are written to:
+- `dist/exif_editor_flutter.app`
+- `dist/exif_editor_flutter-macos.zip`
+
+## Build Release (Web)
+
+```bash
+./scripts/build-flutter-web.sh
+```
+
+Artifact output:
+- `dist/web/`
+
+## Legacy Interfaces (Still Available)
+
+### CLI
+
+```bash
+uv run python edit-exif-cli.py <directory> <latitude> <longitude>
 ```
 
 Example:
-```bash
-python edit-exif-cli.py ./photos 37.7749 -122.4194
-```
-
-### Graphical User Interface
-
-Launch the PyQt5 GUI application:
 
 ```bash
-python edit-exif-gui.py
+uv run python edit-exif-cli.py ./photos 37.7749 -122.4194
 ```
 
-**GUI Features:**
-- Browse and select image directories
-- Thumbnail view with multi-selection support
-- Real-time EXIF data preview
-- Batch editing of GPS coordinates
-- Timezone offset updates
-- Date/time adjustment by offset
-- Sort images by various criteria
+### PyQt5 GUI
 
-## Dependencies
+```bash
+uv run python edit-exif-gui.py
+```
 
-- **piexif** - EXIF data manipulation
-- **Pillow** - Image processing
-- **PyQt5** - GUI framework (for GUI version)
+## Backend API (for Flutter)
 
-## Technical Details
+Run backend alone:
 
-- GPS coordinates are stored in DMS (degrees, minutes, seconds) format in EXIF data
-- DateTime fields use format: `YYYY:MM:DD HH:MM:SS`
-- Timezone offset format: `[+-]HH:MM`
-- Optimized for performance using `piexif.load()` without opening image files
-- Automatically removes thumbnail data from EXIF to avoid compatibility issues
+```bash
+uv run python flutter_backend.py --host 127.0.0.1 --port 8765
+```
+
+Main endpoints include:
+- `/health`
+- `/photos/list`
+- `/photos/details`
+- `/photos/update-gps`
+- `/photos/update-timezone`
+- `/photos/update-datetime-offset`
+- `/location-history/preview`
+- `/location-history/apply`
+
+## Technical Notes
+
+- GPS coordinates are stored in EXIF as DMS rationals.
+- DateTime format is `YYYY:MM:DD HH:MM:SS`.
+- Offset format is `[+-]HH:MM`.
+- `update_image_gps_exif` uses `piexif.insert` to avoid JPEG re-encode.
+- Existing PyQt GUI code remains untouched for compatibility.
 
 ## File Structure
 
-- `exif.py` - Core EXIF manipulation functions and utilities
-- `edit-exif-cli.py` - Command-line interface for batch processing
-- `edit-exif-gui.py` - PyQt5 graphical user interface
+- `exif.py` - core EXIF functions
+- `location_history.py` - Google Location History matching
+- `edit-exif-cli.py` - CLI batch GPS writer
+- `edit-exif-gui.py` - legacy PyQt5 GUI
+- `flutter_backend.py` - FastAPI bridge for Flutter
+- `flutter_app/` - Flutter desktop UI
+- `scripts/dev-flutter.sh` - local dev launcher (backend + Flutter)
+- `scripts/build-flutter-macos.sh` - release build helper
